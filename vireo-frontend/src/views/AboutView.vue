@@ -1,6 +1,8 @@
 <template>
   <div class="about">
     <h1>This is an about page</h1>
+    <!-- 按需引入验证：无需手动 import，构建时由 unplugin-vue-components 自动引入 -->
+    <a-button type="primary">Hello Vireo</a-button>
   </div>
 </template>
 
@@ -10,6 +12,7 @@
     min-height: 100vh;
     display: flex;
     align-items: center;
+    gap: 16px;
   }
 }
 </style>
