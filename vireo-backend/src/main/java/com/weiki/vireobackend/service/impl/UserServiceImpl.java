@@ -110,19 +110,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public LoginUserVO getLoginUser(HttpServletRequest request) {
+    public User getLoginUser(HttpServletRequest request) {
+        // Session 中只存脱敏 VO，作为登录凭证；未登录直接拒绝
         Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
-        if (!(userObj instanceof LoginUserVO loginUserVO)) {
-            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "未登录");
+        if (!(userObj instanceof LoginUserVO loginUserVO) || loginUserVO.getId() == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
-        return loginUserVO;
+        // 再按 id 查库，拿到最新数据（角色变更、封号、逻辑删除等可即时生效）；
+        // 逻辑删除的记录查不到，同样视为未登录。Service 返回完整实体供权限切面读取角色。
+        User currentUser = this.getById(loginUserVO.getId());
+        if (currentUser == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        return currentUser;
     }
 
     @Override
     public boolean userLogout(HttpServletRequest request) {
+        // 未登录不能退出，统一使用 40100，便于前端按状态码拦截
         if (request.getSession().getAttribute(USER_LOGIN_STATE) == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "未登录");
         }
+        // 移除登录态
         request.getSession().removeAttribute(USER_LOGIN_STATE);
         return true;
     }

@@ -44,7 +44,7 @@ class UserServiceImplTest {
 
     @Test
     void userRegisterShouldSaveEncryptedUserAndReturnId() {
-        useMapper(null);
+        useMapper(persistedUser(), persistedUser());
         long userId = userService.userRegister(ACCOUNT, RAW_PASSWORD, RAW_PASSWORD);
 
         assertThat(userId).isEqualTo(1893756824288542721L);
@@ -59,7 +59,7 @@ class UserServiceImplTest {
 
     @Test
     void userRegisterShouldRejectInvalidAccountFormat() {
-        useMapper(null);
+        useMapper(persistedUser(), persistedUser());
         assertThatThrownBy(() -> userService.userRegister("weiki-01", RAW_PASSWORD, RAW_PASSWORD))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("用户账号只能包含字母、数字和下划线");
@@ -70,7 +70,7 @@ class UserServiceImplTest {
 
     @Test
     void userRegisterShouldConvertDuplicateKeyException() {
-        useMapper(null);
+        useMapper(persistedUser(), persistedUser());
         userService.saveException = new DuplicateKeyException("duplicate userAccount");
 
         assertThatThrownBy(() -> userService.userRegister(ACCOUNT, RAW_PASSWORD, RAW_PASSWORD))
@@ -82,12 +82,11 @@ class UserServiceImplTest {
 
     @Test
     void userLoginShouldMatchBcryptAndStoreDesensitizedVoInSession() {
-        User existingUser = persistedUser();
-        useMapper(existingUser);
+        useMapper(persistedUser(), persistedUser());
 
         LoginUserVO loginUserVO = userService.userLogin(ACCOUNT, RAW_PASSWORD, request);
 
-        assertThat(loginUserVO.getId()).isEqualTo(existingUser.getId());
+        assertThat(loginUserVO.getId()).isEqualTo(persistedUser().getId());
         assertThat(loginUserVO.getUserAccount()).isEqualTo(ACCOUNT);
         // Session 中存的是脱敏 VO，而不是带密码哈希的实体
         Object sessionUser = request.getSession().getAttribute(USER_LOGIN_STATE);
@@ -98,7 +97,7 @@ class UserServiceImplTest {
 
     @Test
     void userLoginShouldRejectWrongPassword() {
-        useMapper(persistedUser());
+        useMapper(persistedUser(), persistedUser());
 
         assertThatThrownBy(() -> userService.userLogin(ACCOUNT, "wrongpass9", request))
                 .isInstanceOf(BusinessException.class)
@@ -108,7 +107,7 @@ class UserServiceImplTest {
 
     @Test
     void userLoginShouldRejectUnknownAccount() {
-        useMapper(null);
+        useMapper(null, null);
 
         assertThatThrownBy(() -> userService.userLogin(ACCOUNT, RAW_PASSWORD, request))
                 .isInstanceOf(BusinessException.class)
@@ -117,7 +116,7 @@ class UserServiceImplTest {
 
     @Test
     void userLoginShouldRejectBlankParams() {
-        useMapper(persistedUser());
+        useMapper(persistedUser(), persistedUser());
 
         assertThatThrownBy(() -> userService.userLogin(" ", RAW_PASSWORD, request))
                 .isInstanceOf(BusinessException.class)
@@ -127,11 +126,14 @@ class UserServiceImplTest {
     // ---------- 当前登录用户 / 退出 ----------
 
     @Test
-    void getLoginUserShouldReturnSessionUserWhenLoggedIn() {
-        useMapper(persistedUser());
+    void getLoginUserShouldReloadFromDatabaseAndReturnEntityWhenLoggedIn() {
+        useMapper(persistedUser(), persistedUser());
         userService.userLogin(ACCOUNT, RAW_PASSWORD, request);
 
-        assertThat(userService.getLoginUser(request).getUserAccount()).isEqualTo(ACCOUNT);
+        User loginUser = userService.getLoginUser(request);
+        // Service 返回完整实体（供 AOP 读角色），脱敏由 Controller 负责
+        assertThat(loginUser.getId()).isEqualTo(persistedUser().getId());
+        assertThat(loginUser.getUserAccount()).isEqualTo(ACCOUNT);
     }
 
     @Test
@@ -143,8 +145,20 @@ class UserServiceImplTest {
     }
 
     @Test
+    void getLoginUserShouldThrowNotLoginWhenUserDeleted() {
+        // 登录时能查到用户，但之后用户被删除（按 id 查不到），应视为未登录
+        useMapper(persistedUser(), null);
+        userService.userLogin(ACCOUNT, RAW_PASSWORD, request);
+
+        assertThatThrownBy(() -> userService.getLoginUser(request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("未登录")
+                .extracting("code").isEqualTo(ErrorCode.NOT_LOGIN_ERROR.getCode());
+    }
+
+    @Test
     void userLogoutShouldClearSession() {
-        useMapper(persistedUser());
+        useMapper(persistedUser(), persistedUser());
         userService.userLogin(ACCOUNT, RAW_PASSWORD, request);
 
         assertThat(userService.userLogout(request)).isTrue();
@@ -155,10 +169,11 @@ class UserServiceImplTest {
     }
 
     @Test
-    void userLogoutShouldThrowWhenNotLoggedIn() {
+    void userLogoutShouldThrowNotLoginWhenNotLoggedIn() {
         assertThatThrownBy(() -> userService.userLogout(request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("未登录");
+                .hasMessageContaining("未登录")
+                .extracting("code").isEqualTo(ErrorCode.NOT_LOGIN_ERROR.getCode());
     }
 
     // ---------- 辅助 ----------
@@ -173,23 +188,31 @@ class UserServiceImplTest {
                 .build();
     }
 
-    private void useMapper(User loginUser) {
+    /**
+     * @param queryUser 按账号查询（selectOneByQuery）返回的用户
+     * @param byIdUser  按 id 查询（selectOneById）返回的用户，null 模拟已被删除
+     */
+    private void useMapper(User queryUser, User byIdUser) {
         ReflectionTestUtils.setField(userService, "mapper",
-                userMapper(countByAccountCalls, loginUser));
+                userMapper(countByAccountCalls, queryUser, byIdUser));
     }
 
     @SuppressWarnings("unchecked")
-    private static UserMapper userMapper(AtomicInteger countByAccountCalls, User loginUser) {
+    private static UserMapper userMapper(AtomicInteger countByAccountCalls, User queryUser, User byIdUser) {
         return (UserMapper) Proxy.newProxyInstance(
                 UserMapper.class.getClassLoader(),
                 new Class<?>[]{UserMapper.class},
                 (proxy, method, args) -> {
-                    if ("selectCountByQuery".equals(method.getName())) {
-                        countByAccountCalls.incrementAndGet();
-                        return 0L;
-                    }
-                    if ("selectOneByQuery".equals(method.getName())) {
-                        return loginUser;
+                    switch (method.getName()) {
+                        case "selectCountByQuery":
+                            countByAccountCalls.incrementAndGet();
+                            return 0L;
+                        case "selectOneByQuery":
+                            return queryUser;
+                        case "selectOneById":
+                            return byIdUser;
+                        default:
+                            break;
                     }
                     Class<?> returnType = method.getReturnType();
                     if (returnType.equals(boolean.class)) {

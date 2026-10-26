@@ -6,6 +6,7 @@ import com.weiki.vireobackend.exception.ErrorCode;
 import com.weiki.vireobackend.exception.ThrowUtils;
 import com.weiki.vireobackend.model.dto.user.UserLoginRequest;
 import com.weiki.vireobackend.model.dto.user.UserRegisterRequest;
+import com.weiki.vireobackend.model.entity.User;
 import com.weiki.vireobackend.model.vo.LoginUserVO;
 import com.weiki.vireobackend.service.UserService;
 import jakarta.annotation.Resource;
@@ -56,23 +57,12 @@ public class UserController {
         return ResultUtils.success(loginUserVO);
     }
 
-    /**
-     * 获取当前登录用户
-     *
-     * @param request 请求
-     * @return 脱敏后的登录用户信息
-     */
     @GetMapping("/get/login")
     public BaseResponse<LoginUserVO> getLoginUser(HttpServletRequest request) {
-        return ResultUtils.success(userService.getLoginUser(request));
+        User loginUser = userService.getLoginUser(request);
+        return ResultUtils.success(userService.getLoginUserVO(loginUser));
     }
 
-    /**
-     * 用户退出登录
-     *
-     * @param request 请求
-     * @return 是否退出成功
-     */
     @PostMapping("/logout")
     public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
         return ResultUtils.success(userService.userLogout(request));

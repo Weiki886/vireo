@@ -33,18 +33,18 @@ public interface UserService extends IService<User> {
     LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request);
 
     /**
-     * 获取当前登录用户（从 Session 读取）
+     * 获取当前登录用户
      *
-     * @param request 请求
-     * @return 脱敏后的登录用户信息
+     * @param request
+     * @return
      */
-    LoginUserVO getLoginUser(HttpServletRequest request);
+    User getLoginUser(HttpServletRequest request);
 
     /**
-     * 用户退出登录
+     * 用户注销
      *
-     * @param request 请求（用于清除 Session 登录态）
-     * @return 是否退出成功
+     * @param request
+     * @return
      */
     boolean userLogout(HttpServletRequest request);
 
