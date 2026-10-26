@@ -12,9 +12,15 @@ on:
       - 'vireo-backend/**'
       - '.github/workflows/backend-ci.yml'
 
+# 同一分支新推送时取消旧的运行，节省 CI 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: vireo-backend
