@@ -10,7 +10,7 @@ use vireo;
 -- 用户表
 create table if not exists user
 (
-    id            bigint auto_increment comment 'id' primary key,
+    id            bigint comment 'id（应用层雪花算法生成）' primary key,
     userAccount   varchar(256)                           not null comment '账号',
     userPassword  varchar(512)                           not null comment '密码',
     userName      varchar(256)                           null comment '用户昵称',

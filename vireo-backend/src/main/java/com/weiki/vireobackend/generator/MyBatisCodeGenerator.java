@@ -2,8 +2,11 @@ package com.weiki.vireobackend.generator;
 
 import cn.hutool.core.lang.Dict;
 import cn.hutool.setting.yaml.YamlUtil;
+import com.mybatisflex.annotation.KeyType;
 import com.mybatisflex.codegen.Generator;
+import com.mybatisflex.codegen.config.ColumnConfig;
 import com.mybatisflex.codegen.config.GlobalConfig;
+import com.mybatisflex.core.keygen.KeyGenerators;
 import com.zaxxer.hikari.HikariDataSource;
 
 import java.util.Map;
@@ -53,7 +56,13 @@ public class MyBatisCodeGenerator {
         globalConfig.getStrategyConfig()
                 .setGenerateTable(TABLE_NAMES)
                 // 设置逻辑删除的默认字段名称
-                .setLogicDeleteColumn("isDelete");
+                .setLogicDeleteColumn("isDelete")
+                // user 表主键由应用层雪花算法生成，避免自增 ID 暴露数据规模
+                .setColumnConfig("user", ColumnConfig.create()
+                        .setColumnName("id")
+                        .setPrimaryKey(true)
+                        .setKeyType(KeyType.Generator)
+                        .setKeyValue(KeyGenerators.snowFlakeId));
 
         // 设置生成 entity 并启用 Lombok
         globalConfig.enableEntity()
