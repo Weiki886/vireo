@@ -41,6 +41,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         this.passwordEncoder = passwordEncoder;
     }
 
+    /**
+     * 用户注册：校验入参 → 账号查重（唯一索引兜底并发）→ BCrypt 加密 → 写入用户。
+     *
+     * @param userAccount   用户账号（4-16 位字母、数字、下划线）
+     * @param userPassword  用户密码（明文，至少 8 位）
+     * @param checkPassword 确认密码，必须与密码一致
+     * @return 新用户的雪花 id
+     */
     @Override
     public long userRegister(String userAccount, String userPassword, String checkPassword) {
         // 1. 校验
@@ -83,6 +91,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return user.getId();
     }
 
+    /**
+     * 用户登录：仅按账号查出用户，再用 BCrypt matches 校验密码，
+     * 通过后把脱敏用户信息写入 Session。
+     *
+     * @param userAccount  用户账号
+     * @param userPassword 用户密码（明文）
+     * @param request      请求（用于写入 Session 登录态）
+     * @return 脱敏后的登录用户信息
+     */
     @Override
     public LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request) {
         // 1. 校验
@@ -109,6 +126,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return loginUserVO;
     }
 
+    /**
+     * 获取当前登录用户：从 Session 取出脱敏 VO 作为凭证，再按 id 查库拿到最新完整实体，
+     * 使角色变更、封号、逻辑删除等情况无需重新登录即可生效。
+     *
+     * @param request 请求
+     * @return 当前登录用户实体
+     */
     @Override
     public User getLoginUser(HttpServletRequest request) {
         // Session 中只存脱敏 VO，作为登录凭证；未登录直接拒绝
@@ -125,6 +149,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return currentUser;
     }
 
+    /**
+     * 退出登录：未登录直接抛出 40100，否则移除 Session 中的登录态。
+     *
+     * @param request 请求
+     * @return 退出成功返回 true
+     */
     @Override
     public boolean userLogout(HttpServletRequest request) {
         // 未登录不能退出，统一使用 40100，便于前端按状态码拦截
@@ -136,6 +166,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return true;
     }
 
+    /**
+     * 把用户实体转换为脱敏视图对象（剔除密码等敏感字段）。
+     *
+     * @param user 用户实体
+     * @return 脱敏后的用户信息；入参为 null 时返回 null
+     */
     @Override
     public LoginUserVO getLoginUserVO(User user) {
         if (user == null) {

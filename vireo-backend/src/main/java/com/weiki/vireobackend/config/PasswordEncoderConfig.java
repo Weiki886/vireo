@@ -11,6 +11,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @Configuration
 public class PasswordEncoderConfig {
 
+    /**
+     * 注册 BCrypt 密码编码器，供注册加密、登录校验使用。
+     *
+     * @return BCrypt 密码编码器
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

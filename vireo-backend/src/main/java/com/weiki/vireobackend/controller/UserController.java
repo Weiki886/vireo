@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 用户相关接口：注册、登录、获取当前登录用户、退出登录。
+ */
 @RestController
 @RequestMapping("/user")
 public class UserController {
@@ -57,12 +60,24 @@ public class UserController {
         return ResultUtils.success(loginUserVO);
     }
 
+    /**
+     * 获取当前登录用户（用于前端刷新页面后恢复登录态）。
+     *
+     * @param request 请求（从 Session 读取登录态）
+     * @return 脱敏后的登录用户信息，未登录时返回 40100
+     */
     @GetMapping("/get/login")
     public BaseResponse<LoginUserVO> getLoginUser(HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
         return ResultUtils.success(userService.getLoginUserVO(loginUser));
     }
 
+    /**
+     * 退出登录，清除 Session 中的登录态。
+     *
+     * @param request 请求
+     * @return 是否退出成功
+     */
     @PostMapping("/logout")
     public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
         return ResultUtils.success(userService.userLogout(request));

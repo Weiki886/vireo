@@ -4,6 +4,9 @@ import lombok.Data;
 
 import java.io.Serializable;
 
+/**
+ * 通用删除请求，只携带被删除记录的 id。
+ */
 @Data
 public class DeleteRequest implements Serializable {
 

@@ -2,6 +2,9 @@ package com.weiki.vireobackend.exception;
 
 import lombok.Getter;
 
+/**
+ * 全局错误码枚举。code 与前端约定：0 成功，40xxx 客户端错误，50xxx 服务端错误。
+ */
 @Getter
 public enum ErrorCode {
 
