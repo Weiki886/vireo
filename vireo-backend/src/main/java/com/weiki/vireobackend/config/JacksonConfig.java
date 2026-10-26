@@ -12,6 +12,12 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class JacksonConfig {
 
+    /**
+     * 定制 Jackson：把所有 Long（含 long 包装类型）序列化为字符串，
+     * 避免雪花 ID 超过 JS 安全整数范围导致前端精度丢失。
+     *
+     * @return Jackson 构建器定制器
+     */
     @Bean
     public Jackson2ObjectMapperBuilderCustomizer longToStringCustomizer() {
         return builder -> builder.serializerByType(Long.class, ToStringSerializer.instance);

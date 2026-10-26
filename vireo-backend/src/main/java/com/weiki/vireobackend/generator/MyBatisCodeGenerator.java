@@ -20,6 +20,11 @@ public class MyBatisCodeGenerator {
     // 需要生成的表名
     private static final String[] TABLE_NAMES = {"user"};
 
+    /**
+     * 读取数据源配置并执行代码生成。
+     *
+     * @param args 启动参数（未使用）
+     */
     public static void main(String[] args) {
         // 获取数据源信息（直接复用 application.yaml，避免维护两份配置）
         Dict dict = YamlUtil.loadByPath("application.yaml");
@@ -44,6 +49,12 @@ public class MyBatisCodeGenerator {
         generator.generate();
     }
 
+    /**
+     * 创建代码生成配置：生成包路径、目标表、逻辑删除字段、雪花主键、
+     * 以及 entity / mapper / service / controller 各层开关。
+     *
+     * @return 全局生成配置
+     */
     public static GlobalConfig createGlobalConfig() {
         // 创建配置内容
         GlobalConfig globalConfig = new GlobalConfig();

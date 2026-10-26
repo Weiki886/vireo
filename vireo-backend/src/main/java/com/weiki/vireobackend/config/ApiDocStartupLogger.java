@@ -17,6 +17,10 @@ public class ApiDocStartupLogger {
 
     private final String contextPath;
 
+    /**
+     * @param serverPort  服务端口，默认 8080
+     * @param contextPath 上下文路径，默认为空
+     */
     public ApiDocStartupLogger(
             @Value("${server.port:8080}") int serverPort,
             @Value("${server.servlet.context-path:}") String contextPath) {
@@ -24,6 +28,9 @@ public class ApiDocStartupLogger {
         this.contextPath = contextPath;
     }
 
+    /**
+     * 应用启动完成后打印接口文档（Knife4j）地址。
+     */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         log.info("后端接口文档地址：http://localhost:{}{}/doc.html", serverPort, contextPath);

@@ -33,18 +33,19 @@ public interface UserService extends IService<User> {
     LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request);
 
     /**
-     * 获取当前登录用户
+     * 获取当前登录用户。从 Session 读取登录态后再查库，返回最新的完整用户实体
+     * （供权限切面读取角色）；出参脱敏由 Controller 层负责。
      *
-     * @param request
-     * @return
+     * @param request 请求
+     * @return 当前登录用户实体，未登录时抛出 BusinessException(40100)
      */
     User getLoginUser(HttpServletRequest request);
 
     /**
-     * 用户注销
+     * 用户退出登录，清除 Session 中的登录态。
      *
-     * @param request
-     * @return
+     * @param request 请求
+     * @return 是否退出成功，未登录时抛出 BusinessException(40100)
      */
     boolean userLogout(HttpServletRequest request);
 

@@ -2,6 +2,9 @@ package com.weiki.vireobackend.common;
 
 import lombok.Data;
 
+/**
+ * 通用分页请求参数，具体业务的分页查询 DTO 可继承它。
+ */
 @Data
 public class PageRequest {
 
