@@ -3,6 +3,7 @@ package com.weiki.vireobackend.exception;
 import com.weiki.vireobackend.common.BaseResponse;
 import com.weiki.vireobackend.common.ResultUtils;
 import io.swagger.v3.oas.annotations.Hidden;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -26,6 +27,18 @@ public class GlobalExceptionHandler {
     public BaseResponse<?> businessExceptionHandler(BusinessException e) {
         log.error("BusinessException", e);
         return ResultUtils.error(e.getCode(), e.getMessage());
+    }
+
+    /**
+     * 请求体缺失或 JSON 格式错误等不可读请求，属于客户端参数问题，返回参数错误而非系统错误。
+     *
+     * @param e 请求不可读异常
+     * @return 统一错误响应
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public BaseResponse<?> httpMessageNotReadableHandler(HttpMessageNotReadableException e) {
+        log.warn("HttpMessageNotReadableException: {}", e.getMessage());
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR);
     }
 
     /**

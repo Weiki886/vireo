@@ -15,6 +15,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Proxy;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.weiki.vireobackend.constant.UserConstant.USER_LOGIN_STATE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,6 +30,8 @@ class UserServiceImplTest {
 
     private AtomicInteger countByAccountCalls;
 
+    private AtomicLong existingCount;
+
     private TestUserServiceImpl userService;
 
     private MockHttpServletRequest request;
@@ -36,6 +39,7 @@ class UserServiceImplTest {
     @BeforeEach
     void setUp() {
         countByAccountCalls = new AtomicInteger();
+        existingCount = new AtomicLong();
         userService = new TestUserServiceImpl(passwordEncoder);
         request = new MockHttpServletRequest();
     }
@@ -66,6 +70,58 @@ class UserServiceImplTest {
 
         assertThat(countByAccountCalls).hasValue(0);
         assertThat(userService.savedUser).isNull();
+    }
+
+    @Test
+    void userRegisterShouldRejectBlankParams() {
+        useMapper(persistedUser(), persistedUser());
+
+        assertThatThrownBy(() -> userService.userRegister("  ", RAW_PASSWORD, RAW_PASSWORD))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("参数为空");
+        assertThat(countByAccountCalls).hasValue(0);
+    }
+
+    @Test
+    void userRegisterShouldRejectShortPassword() {
+        useMapper(persistedUser(), persistedUser());
+
+        assertThatThrownBy(() -> userService.userRegister(ACCOUNT, "short", "short"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("用户密码过短");
+        assertThat(countByAccountCalls).hasValue(0);
+    }
+
+    @Test
+    void userRegisterShouldRejectMismatchedPassword() {
+        useMapper(persistedUser(), persistedUser());
+
+        assertThatThrownBy(() -> userService.userRegister(ACCOUNT, RAW_PASSWORD, "otherpass1"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("两次输入的密码不一致");
+        assertThat(countByAccountCalls).hasValue(0);
+    }
+
+    @Test
+    void userRegisterShouldRejectWhenAccountAlreadyExists() {
+        useMapper(persistedUser(), persistedUser());
+        existingCount.set(1);
+
+        assertThatThrownBy(() -> userService.userRegister(ACCOUNT, RAW_PASSWORD, RAW_PASSWORD))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("账号重复");
+        assertThat(userService.savedUser).isNull();
+    }
+
+    @Test
+    void userRegisterShouldThrowSystemErrorWhenSaveFails() {
+        useMapper(persistedUser(), persistedUser());
+        userService.saveReturnsFalse = true;
+
+        assertThatThrownBy(() -> userService.userRegister(ACCOUNT, RAW_PASSWORD, RAW_PASSWORD))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("注册失败，数据库错误")
+                .extracting("code").isEqualTo(ErrorCode.SYSTEM_ERROR.getCode());
     }
 
     @Test
@@ -121,6 +177,41 @@ class UserServiceImplTest {
         assertThatThrownBy(() -> userService.userLogin(" ", RAW_PASSWORD, request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("参数为空");
+    }
+
+    @Test
+    void userLoginShouldRejectInvalidAccountFormat() {
+        useMapper(persistedUser(), persistedUser());
+
+        assertThatThrownBy(() -> userService.userLogin("abc", RAW_PASSWORD, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("账号错误");
+    }
+
+    @Test
+    void userLoginShouldRejectShortPassword() {
+        useMapper(persistedUser(), persistedUser());
+
+        assertThatThrownBy(() -> userService.userLogin(ACCOUNT, "short", request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("密码错误");
+    }
+
+    @Test
+    void getLoginUserVoShouldReturnNullWhenUserIsNull() {
+        assertThat(userService.getLoginUserVO(null)).isNull();
+    }
+
+    @Test
+    void getLoginUserVoShouldCopyFieldsWithoutPassword() {
+        User user = persistedUser();
+
+        LoginUserVO vo = userService.getLoginUserVO(user);
+
+        assertThat(vo.getId()).isEqualTo(user.getId());
+        assertThat(vo.getUserAccount()).isEqualTo(user.getUserAccount());
+        assertThat(vo.getUserName()).isEqualTo(user.getUserName());
+        assertThat(vo.getUserRole()).isEqualTo(user.getUserRole());
     }
 
     // ---------- 当前登录用户 / 退出 ----------
@@ -194,11 +285,12 @@ class UserServiceImplTest {
      */
     private void useMapper(User queryUser, User byIdUser) {
         ReflectionTestUtils.setField(userService, "mapper",
-                userMapper(countByAccountCalls, queryUser, byIdUser));
+                userMapper(countByAccountCalls, existingCount, queryUser, byIdUser));
     }
 
     @SuppressWarnings("unchecked")
-    private static UserMapper userMapper(AtomicInteger countByAccountCalls, User queryUser, User byIdUser) {
+    private static UserMapper userMapper(AtomicInteger countByAccountCalls, AtomicLong existingCount,
+                                         User queryUser, User byIdUser) {
         return (UserMapper) Proxy.newProxyInstance(
                 UserMapper.class.getClassLoader(),
                 new Class<?>[]{UserMapper.class},
@@ -206,7 +298,7 @@ class UserServiceImplTest {
                     switch (method.getName()) {
                         case "selectCountByQuery":
                             countByAccountCalls.incrementAndGet();
-                            return 0L;
+                            return existingCount.get();
                         case "selectOneByQuery":
                             return queryUser;
                         case "selectOneById":
@@ -234,6 +326,8 @@ class UserServiceImplTest {
 
         private RuntimeException saveException;
 
+        private boolean saveReturnsFalse;
+
         TestUserServiceImpl(PasswordEncoder passwordEncoder) {
             super(passwordEncoder);
         }
@@ -242,6 +336,9 @@ class UserServiceImplTest {
         public boolean save(User user) {
             if (saveException != null) {
                 throw saveException;
+            }
+            if (saveReturnsFalse) {
+                return false;
             }
             savedUser = user;
             user.setId(1893756824288542721L);
