@@ -1,9 +1,16 @@
 package com.weiki.vireobackend.service;
 
+import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
+import com.weiki.vireobackend.model.dto.user.UserAddRequest;
+import com.weiki.vireobackend.model.dto.user.UserUpdateRequest;
+import com.weiki.vireobackend.model.dto.user.UserQueryRequest;
 import com.weiki.vireobackend.model.entity.User;
 import com.weiki.vireobackend.model.vo.LoginUserVO;
+import com.weiki.vireobackend.model.vo.UserVO;
 import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.List;
 
 /**
  * 用户 服务层。
@@ -56,5 +63,45 @@ public interface UserService extends IService<User> {
      * @return 脱敏后的用户信息
      */
     LoginUserVO getLoginUserVO(User user);
+
+    /**
+     * 管理员创建用户，新用户使用默认密码。
+     *
+     * @param userAddRequest 创建用户请求
+     * @return 新用户 id
+     */
+    long addUser(UserAddRequest userAddRequest);
+
+    /**
+     * 管理员更新用户信息。
+     *
+     * @param userUpdateRequest 更新用户请求
+     * @return 是否更新成功
+     */
+    boolean updateUser(UserUpdateRequest userUpdateRequest);
+
+    /**
+     * 获取脱敏的用户视图对象。
+     *
+     * @param user 用户实体
+     * @return 脱敏用户信息
+     */
+    UserVO getUserVO(User user);
+
+    /**
+     * 批量获取脱敏的用户视图对象。
+     *
+     * @param userList 用户实体列表
+     * @return 脱敏用户信息列表
+     */
+    List<UserVO> getUserVOList(List<User> userList);
+
+    /**
+     * 根据管理端用户查询请求构造 MyBatis-Flex 查询条件。
+     *
+     * @param userQueryRequest 用户查询请求
+     * @return 查询条件构造器
+     */
+    QueryWrapper getQueryWrapper(UserQueryRequest userQueryRequest);
 
 }

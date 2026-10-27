@@ -1,21 +1,29 @@
 package com.weiki.vireobackend.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.weiki.vireobackend.exception.BusinessException;
 import com.weiki.vireobackend.exception.ErrorCode;
+import com.weiki.vireobackend.model.dto.user.UserAddRequest;
+import com.weiki.vireobackend.model.dto.user.UserUpdateRequest;
+import com.weiki.vireobackend.model.dto.user.UserQueryRequest;
 import com.weiki.vireobackend.model.entity.User;
-import com.weiki.vireobackend.mapper.UserMapper;
 import com.weiki.vireobackend.model.enums.UserRoleEnum;
 import com.weiki.vireobackend.model.vo.LoginUserVO;
+import com.weiki.vireobackend.model.vo.UserVO;
+import com.weiki.vireobackend.mapper.UserMapper;
 import com.weiki.vireobackend.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
+import java.util.Set;
+import java.util.List;
 import java.util.regex.Pattern;
 
 import static com.weiki.vireobackend.constant.UserConstant.USER_LOGIN_STATE;
@@ -34,6 +42,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private static final Pattern ACCOUNT_PATTERN = Pattern.compile("^[a-zA-Z0-9_]{4,16}$");
 
     private static final int MIN_PASSWORD_LENGTH = 8;
+
+    private static final String DEFAULT_USER_PASSWORD = "12345678";
+
+    private static final String DEFAULT_SORT_FIELD = "createTime";
+
+    /**
+     * 管理端用户列表允许排序的字段白名单，避免把任意请求参数直接拼进 ORDER BY。
+     */
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "id", "userAccount", "userName", "createTime", "updateTime"
+    );
 
     private final PasswordEncoder passwordEncoder;
 
@@ -180,6 +199,139 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         LoginUserVO loginUserVO = new LoginUserVO();
         BeanUtil.copyProperties(user, loginUserVO);
         return loginUserVO;
+    }
+
+    /**
+     * 管理员创建用户：校验账号与角色，使用默认密码并加密后入库。
+     *
+     * @param userAddRequest 创建用户请求
+     * @return 新用户 id
+     */
+    @Override
+    public long addUser(UserAddRequest userAddRequest) {
+        if (userAddRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
+        }
+        String userAccount = userAddRequest.getUserAccount();
+        if (StrUtil.isBlank(userAccount) || !ACCOUNT_PATTERN.matcher(userAccount).matches()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,
+                    "用户账号只能包含字母、数字和下划线，长度为 4-16 位");
+        }
+        String role = userAddRequest.getUserRole();
+        if (StrUtil.isBlank(role)) {
+            role = UserRoleEnum.USER.getValue();
+        }
+        if (UserRoleEnum.getEnumByValue(role) == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户角色不合法");
+        }
+
+        User user = new User();
+        BeanUtil.copyProperties(userAddRequest, user);
+        user.setId(null);
+        user.setUserRole(role);
+        user.setUserPassword(encryptPassword(DEFAULT_USER_PASSWORD));
+        try {
+            boolean saved = save(user);
+            if (!saved) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建用户失败");
+            }
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
+        }
+        return user.getId();
+    }
+
+    /**
+     * 管理员更新用户：仅复制 DTO 中允许修改的字段，并校验角色取值。
+     *
+     * @param userUpdateRequest 更新用户请求
+     * @return 是否更新成功
+     */
+    @Override
+    public boolean updateUser(UserUpdateRequest userUpdateRequest) {
+        if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
+        }
+        if (StrUtil.isNotBlank(userUpdateRequest.getUserRole())
+                && UserRoleEnum.getEnumByValue(userUpdateRequest.getUserRole()) == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户角色不合法");
+        }
+
+        User user = new User();
+        BeanUtil.copyProperties(userUpdateRequest, user);
+        boolean updated = updateById(user);
+        if (!updated) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "更新用户失败");
+        }
+        return true;
+    }
+
+    /**
+     * 把用户实体转换为管理员可查看的用户视图对象。UserVO 不包含密码字段。
+     *
+     * @param user 用户实体
+     * @return 脱敏用户信息
+     */
+    @Override
+    public UserVO getUserVO(User user) {
+        if (user == null) {
+            return null;
+        }
+        UserVO userVO = new UserVO();
+        BeanUtil.copyProperties(user, userVO);
+        return userVO;
+    }
+
+    /**
+     * 批量转换用户视图对象。
+     *
+     * @param userList 用户实体列表
+     * @return 脱敏用户视图列表
+     */
+    @Override
+    public List<UserVO> getUserVOList(List<User> userList) {
+        if (CollUtil.isEmpty(userList)) {
+            return List.of();
+        }
+        return userList.stream()
+                .map(this::getUserVO)
+                .toList();
+    }
+
+    /**
+     * 构造管理端用户分页查询条件。空白筛选条件不参与 WHERE；
+     * 未传排序字段时默认按创建时间倒序，排序字段必须命中白名单。
+     *
+     * @param userQueryRequest 用户查询请求
+     * @return MyBatis-Flex 查询条件
+     */
+    @Override
+    public QueryWrapper getQueryWrapper(UserQueryRequest userQueryRequest) {
+        if (userQueryRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
+        }
+        Long id = userQueryRequest.getId();
+        String userAccount = userQueryRequest.getUserAccount();
+        String userName = userQueryRequest.getUserName();
+        String userProfile = userQueryRequest.getUserProfile();
+        String userRole = userQueryRequest.getUserRole();
+        String sortField = userQueryRequest.getSortField();
+        String sortOrder = userQueryRequest.getSortOrder();
+
+        if (StrUtil.isBlank(sortField)) {
+            sortField = DEFAULT_SORT_FIELD;
+        }
+        if (!ALLOWED_SORT_FIELDS.contains(sortField)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "排序字段不支持");
+        }
+
+        return QueryWrapper.create()
+                .eq("id", id, Objects::nonNull)
+                .eq("userRole", userRole, StrUtil::isNotBlank)
+                .like("userAccount", userAccount, StrUtil::isNotBlank)
+                .like("userName", userName, StrUtil::isNotBlank)
+                .like("userProfile", userProfile, StrUtil::isNotBlank)
+                .orderBy(sortField, "ascend".equalsIgnoreCase(sortOrder));
     }
 
     /**

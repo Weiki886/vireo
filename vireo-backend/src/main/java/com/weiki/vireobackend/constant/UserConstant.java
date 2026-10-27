@@ -10,4 +10,10 @@ public interface UserConstant {
      */
     String USER_LOGIN_STATE = "user_login";
 
+    /**
+     * 管理员角色。注解属性必须使用编译期常量，因此这里保留字符串常量；
+     * 运行时角色解析仍统一使用 UserRoleEnum。
+     */
+    String ADMIN_ROLE = "admin";
+
 }
