@@ -53,4 +53,18 @@ describe('loginUser store', () => {
 
     expect(store.loginUser.id).toBeUndefined()
   })
+
+  it('shares one initialization request between concurrent callers', async () => {
+    mockedGetLoginUser.mockResolvedValue(
+      apiResponse({
+        code: 0,
+        data: { id: '1893756824288542721', userName: 'Vireo User' },
+      }),
+    )
+    const store = useLoginUserStore()
+
+    await Promise.all([store.ensureLoginUserLoaded(), store.ensureLoginUserLoaded()])
+
+    expect(mockedGetLoginUser).toHaveBeenCalledTimes(1)
+  })
 })

@@ -102,6 +102,12 @@ declare namespace API {
     userRole?: string
   }
 
+  type UserProfileUpdateRequest = {
+    userName?: string
+    userAvatar?: string
+    userProfile?: string
+  }
+
   type UserVO = {
     id?: string
     userAccount?: string

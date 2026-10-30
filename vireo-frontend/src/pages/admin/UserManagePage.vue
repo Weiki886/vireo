@@ -2,14 +2,15 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   message,
+  type FormInstance,
   type TableColumnsType,
   type TablePaginationConfig,
   type TableProps,
 } from 'ant-design-vue'
-import { DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, EditOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 
-import { deleteUser, listUserVoByPage } from '@/api/userController.ts'
+import { deleteUser, listUserVoByPage, updateUser } from '@/api/userController.ts'
 
 const columns: TableColumnsType = [
   { title: 'ID', dataIndex: 'id', width: 200, ellipsis: true },
@@ -19,13 +20,23 @@ const columns: TableColumnsType = [
   { title: '简介', dataIndex: 'userProfile', ellipsis: true },
   { title: '用户角色', dataIndex: 'userRole', width: 110 },
   { title: '创建时间', dataIndex: 'createTime', width: 180 },
-  { title: '操作', key: 'action', width: 100, fixed: 'right' },
+  { title: '操作', key: 'action', width: 160, fixed: 'right' },
 ]
 
 const data = ref<API.UserVO[]>([])
 const total = ref(0)
 const loading = ref(false)
 const deletingId = ref<string>()
+const editOpen = ref(false)
+const editLoading = ref(false)
+const editFormRef = ref<FormInstance>()
+const editForm = reactive<API.UserUpdateRequest>({
+  id: undefined,
+  userName: '',
+  userAvatar: '',
+  userProfile: '',
+  userRole: 'user',
+})
 
 const searchParams = reactive<API.UserQueryRequest>({
   pageNum: 1,
@@ -101,6 +112,50 @@ const doDelete = async (id?: string) => {
   }
 }
 
+const openEditModal = (record: API.UserVO) => {
+  editForm.id = record.id
+  editForm.userName = record.userName ?? ''
+  editForm.userAvatar = record.userAvatar ?? ''
+  editForm.userProfile = record.userProfile ?? ''
+  editForm.userRole = record.userRole ?? 'user'
+  editOpen.value = true
+}
+
+const handleEditSubmit = async () => {
+  if (editLoading.value || !editForm.id) {
+    return
+  }
+  editLoading.value = true
+  const valid = await editFormRef.value?.validate().then(
+    () => true,
+    () => false,
+  )
+  if (!valid) {
+    editLoading.value = false
+    return
+  }
+  try {
+    const res = await updateUser({
+      id: editForm.id,
+      userName: editForm.userName?.trim(),
+      userAvatar: editForm.userAvatar?.trim() ?? '',
+      userProfile: editForm.userProfile?.trim() ?? '',
+      userRole: editForm.userRole,
+    })
+    if (res.data.code === 0 && res.data.data) {
+      message.success('用户信息已更新')
+      editOpen.value = false
+      await fetchData()
+    } else {
+      message.error(res.data.message || '更新用户失败')
+    }
+  } catch {
+    // 网络错误由全局响应拦截器统一提示。
+  } finally {
+    editLoading.value = false
+  }
+}
+
 const rowKey = (record: API.UserVO) => record.id ?? ''
 </script>
 
@@ -156,20 +211,71 @@ const rowKey = (record: API.UserVO) => record.id ?? ''
           {{ record.createTime ? dayjs(record.createTime).format('YYYY-MM-DD HH:mm:ss') : '-' }}
         </template>
         <template v-else-if="column.key === 'action'">
-          <a-popconfirm
-            title="确定删除该用户吗？"
-            ok-text="删除"
-            cancel-text="取消"
-            @confirm="doDelete(record.id)"
-          >
-            <a-button danger type="link" :loading="deletingId === record.id">
-              <template #icon><DeleteOutlined /></template>
-              删除
+          <a-space :size="4">
+            <a-button type="link" @click="openEditModal(record)">
+              <template #icon><EditOutlined /></template>
+              编辑
             </a-button>
-          </a-popconfirm>
+            <a-popconfirm
+              title="确定删除该用户吗？"
+              ok-text="删除"
+              cancel-text="取消"
+              @confirm="doDelete(record.id)"
+            >
+              <a-button danger type="link" :loading="deletingId === record.id">
+                <template #icon><DeleteOutlined /></template>
+                删除
+              </a-button>
+            </a-popconfirm>
+          </a-space>
         </template>
       </template>
     </a-table>
+
+    <a-modal
+      v-model:open="editOpen"
+      title="编辑用户"
+      ok-text="保存"
+      cancel-text="取消"
+      :confirm-loading="editLoading"
+      @ok="handleEditSubmit"
+    >
+      <a-form ref="editFormRef" :model="editForm" layout="vertical">
+        <a-form-item
+          label="昵称"
+          name="userName"
+          :rules="[
+            { required: true, whitespace: true, message: '请输入昵称' },
+            { max: 256, message: '昵称不能超过 256 个字符' },
+          ]"
+        >
+          <a-input v-model:value="editForm.userName" :maxlength="256" show-count />
+        </a-form-item>
+        <a-form-item
+          label="头像地址"
+          name="userAvatar"
+          :rules="[{ max: 1024, message: '头像地址不能超过 1024 个字符' }]"
+        >
+          <a-input
+            v-model:value="editForm.userAvatar"
+            placeholder="https://example.com/avatar.png"
+          />
+        </a-form-item>
+        <a-form-item
+          label="个人简介"
+          name="userProfile"
+          :rules="[{ max: 512, message: '个人简介不能超过 512 个字符' }]"
+        >
+          <a-textarea v-model:value="editForm.userProfile" :maxlength="512" :rows="4" show-count />
+        </a-form-item>
+        <a-form-item label="用户角色" name="userRole" :rules="[{ required: true }]">
+          <a-select v-model:value="editForm.userRole">
+            <a-select-option value="user">普通用户</a-select-option>
+            <a-select-option value="admin">管理员</a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </main>
 </template>
 

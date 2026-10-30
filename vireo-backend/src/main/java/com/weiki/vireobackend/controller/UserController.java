@@ -10,6 +10,7 @@ import com.weiki.vireobackend.exception.ErrorCode;
 import com.weiki.vireobackend.exception.ThrowUtils;
 import com.weiki.vireobackend.model.dto.user.UserAddRequest;
 import com.weiki.vireobackend.model.dto.user.UserLoginRequest;
+import com.weiki.vireobackend.model.dto.user.UserProfileUpdateRequest;
 import com.weiki.vireobackend.model.dto.user.UserQueryRequest;
 import com.weiki.vireobackend.model.dto.user.UserRegisterRequest;
 import com.weiki.vireobackend.model.dto.user.UserUpdateRequest;
@@ -148,6 +149,25 @@ public class UserController {
         ThrowUtils.throwIf(userUpdateRequest == null || userUpdateRequest.getId() == null,
                 ErrorCode.PARAMS_ERROR);
         return ResultUtils.success(userService.updateUser(userUpdateRequest));
+    }
+
+    /**
+     * 更新当前登录用户自己的公开资料。
+     *
+     * <p>用户身份从 Session 获取；请求体不包含 id、账号、密码或角色。</p>
+     *
+     * @param userProfileUpdateRequest 当前用户资料更新请求
+     * @param request                  请求
+     * @return 更新后的脱敏登录用户信息
+     */
+    @PostMapping("/update/my")
+    @AuthCheck
+    public BaseResponse<LoginUserVO> updateCurrentUser(
+            @RequestBody(required = false) UserProfileUpdateRequest userProfileUpdateRequest,
+            HttpServletRequest request) {
+        ThrowUtils.throwIf(userProfileUpdateRequest == null, ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        return ResultUtils.success(userService.updateCurrentUser(loginUser, userProfileUpdateRequest));
     }
 
     /**

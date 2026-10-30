@@ -8,6 +8,7 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.weiki.vireobackend.exception.BusinessException;
 import com.weiki.vireobackend.exception.ErrorCode;
 import com.weiki.vireobackend.model.dto.user.UserAddRequest;
+import com.weiki.vireobackend.model.dto.user.UserProfileUpdateRequest;
 import com.weiki.vireobackend.model.dto.user.UserUpdateRequest;
 import com.weiki.vireobackend.model.dto.user.UserQueryRequest;
 import com.weiki.vireobackend.model.entity.User;
@@ -46,6 +47,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private static final String DEFAULT_USER_PASSWORD = "12345678";
 
     private static final String DEFAULT_SORT_FIELD = "createTime";
+
+    private static final int MAX_USER_NAME_LENGTH = 256;
+
+    private static final int MAX_USER_AVATAR_LENGTH = 1024;
+
+    private static final int MAX_USER_PROFILE_LENGTH = 512;
 
     /**
      * 管理端用户列表允许排序的字段白名单，避免把任意请求参数直接拼进 ORDER BY。
@@ -264,6 +271,67 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "更新用户失败");
         }
         return true;
+    }
+
+    /**
+     * 更新当前登录用户的公开资料。只复制 DTO 明确允许的字段，
+     * 用户 id 始终来自 Session 对应的当前用户，角色等敏感字段不接受客户端输入。
+     *
+     * @param loginUser 从 Session 解析出的当前用户
+     * @param userProfileUpdateRequest 当前用户资料更新请求
+     * @return 更新后的脱敏登录用户信息
+     */
+    @Override
+    public LoginUserVO updateCurrentUser(User loginUser, UserProfileUpdateRequest userProfileUpdateRequest) {
+        if (loginUser == null || loginUser.getId() == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        if (userProfileUpdateRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请求参数为空");
+        }
+
+        String userName = userProfileUpdateRequest.getUserName();
+        String userAvatar = userProfileUpdateRequest.getUserAvatar();
+        String userProfile = userProfileUpdateRequest.getUserProfile();
+        if (userName == null && userAvatar == null && userProfile == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "至少提供一个要更新的字段");
+        }
+        if (userName != null) {
+            userName = userName.trim();
+            if (userName.isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户昵称不能为空");
+            }
+            if (userName.length() > MAX_USER_NAME_LENGTH) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户昵称过长");
+            }
+        }
+        if (userAvatar != null && userAvatar.length() > MAX_USER_AVATAR_LENGTH) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户头像地址过长");
+        }
+        if (userProfile != null && userProfile.length() > MAX_USER_PROFILE_LENGTH) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户简介过长");
+        }
+
+        User updateUser = new User();
+        updateUser.setId(loginUser.getId());
+        updateUser.setUserName(userName);
+        updateUser.setUserAvatar(userAvatar);
+        updateUser.setUserProfile(userProfile);
+        boolean updated = updateById(updateUser);
+        if (!updated) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "更新用户资料失败");
+        }
+
+        if (userName != null) {
+            loginUser.setUserName(userName);
+        }
+        if (userAvatar != null) {
+            loginUser.setUserAvatar(userAvatar);
+        }
+        if (userProfile != null) {
+            loginUser.setUserProfile(userProfile);
+        }
+        return getLoginUserVO(loginUser);
     }
 
     /**

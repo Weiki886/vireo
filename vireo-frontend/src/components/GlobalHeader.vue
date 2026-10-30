@@ -2,10 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { message, type MenuProps } from 'ant-design-vue'
-import { LogoutOutlined } from '@ant-design/icons-vue'
+import { LogoutOutlined, UserOutlined } from '@ant-design/icons-vue'
 
 import { useLoginUserStore } from '@/router/loginUser.ts'
 import { userLogout } from '@/api/userController.ts'
+import { getVisibleMenuRoutes } from '@/router/access.ts'
+import { appRoutes } from '@/router'
 import vireoLogo from '@/assets/vireo-logo.png'
 
 const loginUserStore = useLoginUserStore()
@@ -14,13 +16,13 @@ const loginUserStore = useLoginUserStore()
 const router = useRouter()
 const route = useRoute()
 
-// 菜单项：key 直接使用路由 path，点击时可直接用于跳转
-const items = computed<MenuProps['items']>(() => [
-  { key: '/', label: '首页' },
-  ...(loginUserStore.loginUser.userRole === 'admin'
-    ? [{ key: '/admin/userManage', label: '用户管理' }]
-    : []),
-])
+// 菜单直接来自路由 meta，权限规则与页面拦截共用同一份配置。
+const items = computed<MenuProps['items']>(() =>
+  getVisibleMenuRoutes(appRoutes, loginUserStore.loginUser).map((menuRoute) => ({
+    key: menuRoute.path,
+    label: menuRoute.meta?.title ?? String(menuRoute.name ?? ''),
+  })),
+)
 
 // 当前高亮的菜单项
 const selectedKeys = ref<string[]>([])
@@ -44,6 +46,12 @@ const handleMenuClick: MenuProps['onClick'] = (e) => {
 }
 
 const logoutLoading = ref(false)
+
+const handleUserMenuClick: MenuProps['onClick'] = ({ key }) => {
+  if (String(key) === 'profile') {
+    void router.push('/user/profile')
+  }
+}
 
 const doLogout = async () => {
   if (logoutLoading.value) {
@@ -89,7 +97,11 @@ const doLogout = async () => {
           <span>{{ loginUserStore.loginUser.userName || '未命名' }}</span>
         </a-space>
         <template #overlay>
-          <a-menu>
+          <a-menu @click="handleUserMenuClick">
+            <a-menu-item key="profile">
+              <UserOutlined />
+              个人设置
+            </a-menu-item>
             <a-menu-item key="logout" :disabled="logoutLoading" @click="doLogout">
               <LogoutOutlined />
               退出登录

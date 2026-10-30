@@ -5,6 +5,7 @@ import com.weiki.vireobackend.exception.BusinessException;
 import com.weiki.vireobackend.exception.ErrorCode;
 import com.weiki.vireobackend.mapper.UserMapper;
 import com.weiki.vireobackend.model.dto.user.UserAddRequest;
+import com.weiki.vireobackend.model.dto.user.UserProfileUpdateRequest;
 import com.weiki.vireobackend.model.dto.user.UserUpdateRequest;
 import com.weiki.vireobackend.model.dto.user.UserQueryRequest;
 import com.weiki.vireobackend.model.entity.User;
@@ -278,6 +279,49 @@ class UserServiceImplTest {
         assertThatThrownBy(() -> userService.updateUser(updateRequest))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("用户角色不合法");
+    }
+
+    @Test
+    void updateCurrentUserShouldOnlyApplyProfileFields() {
+        User loginUser = persistedUser();
+        UserProfileUpdateRequest updateRequest = new UserProfileUpdateRequest();
+        updateRequest.setUserName("新昵称");
+        updateRequest.setUserAvatar("https://example.com/avatar.png");
+        updateRequest.setUserProfile("新的个人简介");
+
+        LoginUserVO updatedUser = userService.updateCurrentUser(loginUser, updateRequest);
+
+        assertThat(userService.updatedUser.getId()).isEqualTo(loginUser.getId());
+        assertThat(userService.updatedUser.getUserName()).isEqualTo("新昵称");
+        assertThat(userService.updatedUser.getUserAvatar()).isEqualTo("https://example.com/avatar.png");
+        assertThat(userService.updatedUser.getUserProfile()).isEqualTo("新的个人简介");
+        assertThat(userService.updatedUser.getUserAccount()).isNull();
+        assertThat(userService.updatedUser.getUserPassword()).isNull();
+        assertThat(userService.updatedUser.getUserRole()).isNull();
+        assertThat(updatedUser.getUserName()).isEqualTo("新昵称");
+        assertThat(updatedUser.getUserRole()).isEqualTo("user");
+    }
+
+    @Test
+    void updateCurrentUserShouldRejectBlankNickname() {
+        UserProfileUpdateRequest updateRequest = new UserProfileUpdateRequest();
+        updateRequest.setUserName(" ");
+
+        assertThatThrownBy(() -> userService.updateCurrentUser(persistedUser(), updateRequest))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("用户昵称不能为空");
+        assertThat(userService.updatedUser).isNull();
+    }
+
+    @Test
+    void updateCurrentUserShouldRejectOversizedProfileData() {
+        UserProfileUpdateRequest updateRequest = new UserProfileUpdateRequest();
+        updateRequest.setUserProfile("a".repeat(513));
+
+        assertThatThrownBy(() -> userService.updateCurrentUser(persistedUser(), updateRequest))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("用户简介过长");
+        assertThat(userService.updatedUser).isNull();
     }
 
     @Test

@@ -180,6 +180,34 @@ class UserControllerTest {
     }
 
     @Test
+    void authenticatedUserShouldUpdateOwnProfile() throws Exception {
+        User loginUser = new User();
+        loginUser.setId(USER_ID);
+        loginUser.setUserAccount("weiki_01");
+        loginUser.setUserRole("user");
+        LoginUserVO updatedUser = new LoginUserVO();
+        updatedUser.setId(USER_ID);
+        updatedUser.setUserAccount("weiki_01");
+        updatedUser.setUserName("新昵称");
+        updatedUser.setUserRole("user");
+        when(userService.getLoginUser(any())).thenReturn(loginUser);
+        when(userService.updateCurrentUser(any(), any())).thenReturn(updatedUser);
+
+        mockMvc.perform(post("/user/update/my")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"id":999,"userName":"新昵称","userRole":"admin"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.userName").value("新昵称"))
+                .andExpect(jsonPath("$.data.userRole").value("user"));
+
+        verify(userService).updateCurrentUser(any(User.class), argThat(request ->
+                "新昵称".equals(request.getUserName())));
+    }
+
+    @Test
     void adminListUserVoByPageShouldReturnDesensitizedPage() throws Exception {
         loginAsAdmin();
         User user = new User();

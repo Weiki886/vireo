@@ -8,6 +8,7 @@ export const useLoginUserStore = defineStore('loginUser', () => {
   const loginUser = ref<API.LoginUserVO>({
     userName: '未登录',
   })
+  let initializationPromise: Promise<void> | null = null
 
   // 获取登录用户信息
   async function fetchLoginUser() {
@@ -24,9 +25,17 @@ export const useLoginUserStore = defineStore('loginUser', () => {
     }
   }
 
+  // 路由守卫和页面初始化可能同时请求登录态，这里共享同一个 Promise，避免重复请求。
+  function ensureLoginUserLoaded() {
+    if (!initializationPromise) {
+      initializationPromise = fetchLoginUser()
+    }
+    return initializationPromise
+  }
+
   // 更新登录用户信息
   function setLoginUser(newLoginUser: API.LoginUserVO) {
     loginUser.value = newLoginUser
   }
-  return { loginUser, setLoginUser, fetchLoginUser }
+  return { loginUser, setLoginUser, fetchLoginUser, ensureLoginUserLoaded }
 })

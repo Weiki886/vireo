@@ -3,6 +3,7 @@ package com.weiki.vireobackend.service;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import com.weiki.vireobackend.model.dto.user.UserAddRequest;
+import com.weiki.vireobackend.model.dto.user.UserProfileUpdateRequest;
 import com.weiki.vireobackend.model.dto.user.UserUpdateRequest;
 import com.weiki.vireobackend.model.dto.user.UserQueryRequest;
 import com.weiki.vireobackend.model.entity.User;
@@ -79,6 +80,15 @@ public interface UserService extends IService<User> {
      * @return 是否更新成功
      */
     boolean updateUser(UserUpdateRequest userUpdateRequest);
+
+    /**
+     * 更新当前登录用户可自行维护的资料。
+     *
+     * @param loginUser            从 Session 解析出的当前用户
+     * @param userProfileUpdateRequest 当前用户资料更新请求
+     * @return 更新后的脱敏登录用户信息
+     */
+    LoginUserVO updateCurrentUser(User loginUser, UserProfileUpdateRequest userProfileUpdateRequest);
 
     /**
      * 获取脱敏的用户视图对象。

@@ -5,6 +5,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.weiki.vireobackend.exception.BusinessException;
 import com.weiki.vireobackend.exception.ErrorCode;
 import com.weiki.vireobackend.model.entity.User;
+import com.weiki.vireobackend.model.vo.LoginUserVO;
 import com.weiki.vireobackend.model.vo.UserVO;
 import com.weiki.vireobackend.service.UserService;
 import org.junit.jupiter.api.Test;
@@ -102,6 +103,43 @@ class UserControllerAopTest {
                 .andExpect(jsonPath("$.code").value(ErrorCode.NOT_LOGIN_ERROR.getCode()));
 
         verify(userService, never()).getById(anyLong());
+    }
+
+    @Test
+    void normalUserCanUpdateOwnProfile() throws Exception {
+        User normalUser = userWithRole("user");
+        LoginUserVO updatedUser = new LoginUserVO();
+        updatedUser.setId(USER_ID);
+        updatedUser.setUserName("新昵称");
+        updatedUser.setUserRole("user");
+        when(userService.getLoginUser(any())).thenReturn(normalUser);
+        when(userService.updateCurrentUser(any(), any())).thenReturn(updatedUser);
+
+        mockMvc.perform(post("/user/update/my")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"userName":"新昵称"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.userName").value("新昵称"))
+                .andExpect(jsonPath("$.data.userRole").value("user"));
+    }
+
+    @Test
+    void guestCannotUpdateOwnProfile() throws Exception {
+        when(userService.getLoginUser(any()))
+                .thenThrow(new BusinessException(ErrorCode.NOT_LOGIN_ERROR));
+
+        mockMvc.perform(post("/user/update/my")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"userName":"新昵称"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ErrorCode.NOT_LOGIN_ERROR.getCode()));
+
+        verify(userService, never()).updateCurrentUser(any(), any());
     }
 
     private static User userWithRole(String role) {
